@@ -46,8 +46,13 @@ app.logger.info('Application startup')
 # Initialize extensions
 CORS(app, resources={
     r"/api/*": {
+<<<<<<< HEAD
         "origins": ["https://hrishith30.github.io/portfolio", "http://localhost:3000"],
         "methods": ["POST", "OPTIONS"],
+=======
+        "origins": ["https://hrishith30.github.io/portfolio"],
+        "methods": ["POST"],
+>>>>>>> 80690e26712754b445cb775bc2cb8014daed70bf
         "allow_headers": ["Content-Type"]
     }
 })
@@ -73,7 +78,7 @@ def restart_server():
     app.logger.info("Restarting server...")
     os.execv(sys.executable, ['python'] + sys.argv)
 
-@app.route('/api/contact', methods=['POST'])
+@app.route('/', methods=['POST'])
 def contact():
     global server_healthy
     try:
