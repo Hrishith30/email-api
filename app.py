@@ -6,7 +6,6 @@ import logging
 from logging.handlers import RotatingFileHandler
 from dotenv import load_dotenv
 import traceback
-import multiprocessing
 from waitress import serve
 import time
 import sys
@@ -43,21 +42,21 @@ app.logger.addHandler(file_handler)
 app.logger.setLevel(logging.INFO)
 app.logger.info('Application startup')
 
-# Initialize extensions
+# Setup CORS properly for GitHub Pages
 CORS(app, resources={
     r"/api/*": {
         "origins": [
             "https://hrishith30.github.io",
-            "https://hrishith30.github.io/portfolio",
-            "http://localhost:3000",
-            "http://localhost:5000"
+            "http://localhost:3000"
         ],
         "methods": ["GET", "POST", "OPTIONS"],
-        "allow_headers": ["Content-Type", "Accept", "Authorization"],
-        "expose_headers": ["Content-Type", "X-CSRFToken"],
+        "allow_headers": ["Content-Type", "Accept", "Authorization", "Origin"],
+        "expose_headers": ["Content-Type"],
         "supports_credentials": True
     }
 })
+
+# Initialize mail
 mail = Mail(app)
 
 # Server health monitoring
@@ -82,94 +81,68 @@ def restart_server():
 
 @app.route('/api/contact', methods=['POST'])
 def contact():
-    global server_healthy
     try:
         # Log the incoming request
         app.logger.info("Received contact form submission")
         
-        # Get JSON data with error handling
-        try:
-            data = request.get_json()
-            if not data:
-                raise ValueError("No JSON data received")
-        except Exception as e:
-            app.logger.error(f"Error parsing JSON: {str(e)}")
+        # Get JSON data
+        data = request.get_json()
+        if not data:
             return jsonify({
                 'success': False,
-                'message': 'Invalid request format'
+                'message': 'No data received'
             }), 400
 
-        # Debug logging
+        # Log received data
         app.logger.info(f"Received data: {data}")
         
-        # Extract and validate form data
-        required_fields = {
-            'name': data.get('name'),
-            'email': data.get('email'),
-            'message': data.get('message')
-        }
-        
-        # Check for missing fields
-        missing_fields = [field for field, value in required_fields.items() if not value]
-        if missing_fields:
-            app.logger.warning(f"Missing required fields: {', '.join(missing_fields)}")
+        # Extract form data
+        name = data.get('name')
+        email = data.get('email')
+        country_name = data.get('country_name')
+        country_code = data.get('country_code_display', '').strip()
+        phone = data.get('phone', '').strip()
+        message = data.get('message')
+
+        # Validate required fields
+        if not all([name, email, message]):
             return jsonify({
                 'success': False,
-                'message': f"Missing required fields: {', '.join(missing_fields)}"
+                'message': 'Missing required fields'
             }), 400
-
-        # Extract optional fields
-        country = data.get('country_name', 'Not specified')
-        country_phone = str(data.get('country_code_display', '')).strip()
-        phone = data.get('phone', 'Not specified')
 
         # Create email body
         email_body = f"""
         New Contact Form Submission
 
-        Name: {required_fields['name']}
-        Email: {required_fields['email']}
-        Country: {country}
-        Phone: +{country_phone} {phone}
+        Name: {name}
+        Email: {email}
+        Country: {country_name}
+        Phone: +{country_code} {phone}
         
         Message:
-        {required_fields['message']}
+        {message}
         """
 
-        # Send email with retry mechanism
-        max_retries = 3
-        for attempt in range(max_retries):
-            try:
-                msg = Message(
-                    subject='New Contact Form Submission',
-                    recipients=[os.getenv('RECIPIENT_EMAIL')],
-                    body=email_body
-                )
-                msg.reply_to = required_fields['email']
-                mail.send(msg)
-                app.logger.info(f"Email sent successfully on attempt {attempt + 1}")
-                break
-            except Exception as mail_error:
-                app.logger.error(f"Attempt {attempt + 1} failed: {str(mail_error)}")
-                if attempt == max_retries - 1:
-                    return jsonify({
-                        'success': False,
-                        'message': 'Failed to send email. Please try again later.'
-                    }), 500
-                time.sleep(2)
+        # Send email
+        msg = Message(
+            subject='New Contact Form Submission',
+            recipients=[os.getenv('RECIPIENT_EMAIL')],
+            body=email_body
+        )
+        msg.reply_to = email
+        mail.send(msg)
 
-        server_healthy = True
         return jsonify({
             'success': True,
             'message': 'Message sent successfully!'
         })
 
     except Exception as e:
-        server_healthy = False
-        app.logger.error(f"Unexpected error: {str(e)}\n{traceback.format_exc()}")
+        app.logger.error(f"Error: {str(e)}\n{traceback.format_exc()}")
         return jsonify({
             'success': False,
-            'message': 'An unexpected error occurred. Please try again later.'
+            'message': 'Failed to send message. Please try again.'
         }), 500
 
 # Health check endpoint
@@ -187,28 +160,14 @@ def run_server():
         monitor_thread = Thread(target=monitor_server_health, daemon=True)
         monitor_thread.start()
 
-        # Calculate optimal number of threads
-        num_threads = multiprocessing.cpu_count() * 2
-        
-        # Use waitress as production server
-        app.logger.info(f'Starting server with {num_threads} threads')
-        serve(app, host='0.0.0.0', port=5000, threads=num_threads)
+        # Use waitress for production
+        app.logger.info(f'Starting server on port {int(os.environ.get("PORT", 5000))}')
+        serve(app, host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
     except Exception as e:
         app.logger.error(f'Server error: {str(e)}')
         time.sleep(5)  # Wait before restart attempt
         restart_server()
 
 if __name__ == '__main__':
-    # Install additional requirements
-    os.system('pip install waitress')
-    
-    # Run the production server
-    while True:
-        try:
-            run_server()
-        except KeyboardInterrupt:
-            sys.exit(0)
-        except Exception as e:
-            app.logger.error(f"Fatal error: {str(e)}")
-            time.sleep(5)  # Wait before restart
-            continue 
+    # Use waitress for production
+    serve(app, host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
