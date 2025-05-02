@@ -18,6 +18,10 @@ load_dotenv()
 # Initialize Flask app
 app = Flask(__name__)
 
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 # App configuration
 app.config.update(
     DEBUG=False,
@@ -41,19 +45,35 @@ file_handler.setFormatter(logging.Formatter(
 file_handler.setLevel(logging.INFO)
 app.logger.addHandler(file_handler)
 app.logger.setLevel(logging.INFO)
-app.logger.info('Application startup')
 
-# Setup CORS properly for GitHub Pages
+# Add console handler for better visibility
+console_handler = logging.StreamHandler(sys.stdout)
+console_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
+app.logger.addHandler(console_handler)
+
+app.logger.info('Application startup - Initializing server...')
+
+# Allow all origins for development and production
+ALLOWED_ORIGINS = [
+    "https://hrishith30.github.io",
+    "http://localhost:3000",
+    "http://localhost:3001",
+    "https://hrishith30.github.io/portfolio"
+]
+
+# CORS configuration
 CORS(app, resources={
-    r"/api/*": {
-        "origins": ["https://hrishith30.github.io/portfolio"],
-        "methods": ["POST", "OPTIONS"],
-        "allow_headers": ["Content-Type", "Accept"]
+    r"/*": {
+        "origins": ALLOWED_ORIGINS,
+        "methods": ["GET", "POST", "OPTIONS"],
+        "allow_headers": ["Content-Type", "Accept", "Origin"],
+        "supports_credentials": False
     }
 })
 
 # Initialize mail
 mail = Mail(app)
+app.logger.info('Mail server configured')
 
 # Server health monitoring
 server_healthy = True
@@ -75,26 +95,44 @@ def restart_server():
     app.logger.info("Restarting server...")
     os.execv(sys.executable, ['python'] + sys.argv)
 
-@app.route('/api/contact', methods=['POST'])
+@app.after_request
+def after_request(response):
+    origin = request.headers.get('Origin')
+    if origin in ALLOWED_ORIGINS:
+        response.headers.add('Access-Control-Allow-Origin', origin)
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+    response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
+    response.headers.add('Access-Control-Allow-Credentials', 'false')
+    return response
+
+@app.route('/api/test', methods=['GET'])
+def test():
+    return jsonify({"status": "API is working"}), 200
+
+@app.route('/api/contact', methods=['POST', 'OPTIONS'])
 def contact():
+    logger.info(f"Received {request.method} request from {request.headers.get('Origin')}")
+    
+    if request.method == 'OPTIONS':
+        return jsonify({"status": "ok"}), 200
+
     try:
         data = request.get_json()
-        
-        if not all(key in data for key in ['name', 'email', 'phone', 'message']):
-            return jsonify({'message': 'Missing required fields'}), 400
+        logger.info(f"Received data: {data}")
 
-        # Log the incoming request
-        app.logger.info(f'Received contact form submission from {data["email"]}')
+        if not data:
+            return jsonify({'message': 'No data received'}), 400
 
-        # Create email body
+        # Create and send email
         email_body = f"""
         New Contact Form Submission
-        
-        Name: {data['name']}
-        Email: {data['email']}
-        Phone: {data['phone']}
-        Message: {data['message']}
-        
+
+        Name: {data.get('name', 'Not provided')}
+        Email: {data.get('email', 'Not provided')}
+        Country: {data.get('country', 'Not provided')}
+        Phone: {data.get('phone', 'Not provided')}
+        Message: {data.get('message', 'Not provided')}
+
         Sent at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
         """
 
@@ -105,13 +143,12 @@ def contact():
         )
 
         mail.send(msg)
-        app.logger.info(f'Successfully sent email for {data["email"]}')
-        
+        logger.info("Email sent successfully")
         return jsonify({'message': 'Message sent successfully'}), 200
 
     except Exception as e:
-        app.logger.error(f'Error processing request: {str(e)}')
-        return jsonify({'message': 'Internal server error'}), 500
+        logger.error(f"Error: {str(e)}")
+        return jsonify({'message': f'Server error: {str(e)}'}), 500
 
 # Health check endpoint
 @app.route('/health', methods=['GET'])
@@ -130,6 +167,7 @@ def run_server():
 
         # Use waitress for production
         app.logger.info(f'Starting server on port {int(os.environ.get("PORT", 5000))}')
+        app.logger.info('Server is ready to accept connections')
         serve(app, host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
     except Exception as e:
         app.logger.error(f'Server error: {str(e)}')
@@ -138,4 +176,7 @@ def run_server():
 
 if __name__ == '__main__':
     # Use waitress for production
-    serve(app, host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
+    port = int(os.environ.get('PORT', 5000))
+    app.logger.info(f'Starting server on port {port}...')
+    app.logger.info('Server is ready to accept connections')
+    serve(app, host='0.0.0.0', port=port)
