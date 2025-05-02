@@ -10,7 +10,7 @@ from waitress import serve
 import time
 import sys
 from threading import Thread
-from datetime import datetime
+import requests
 
 # Load environment variables
 load_dotenv()
@@ -132,8 +132,6 @@ def contact():
         Country: {data.get('country', 'Not provided')}
         Phone: {data.get('phone', 'Not provided')}
         Message: {data.get('message', 'Not provided')}
-
-        Sent at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
         """
 
         msg = Message(
@@ -159,11 +157,29 @@ def health_check():
         'timestamp': time.time()
     }), 200 if server_healthy else 500
 
+def self_ping():
+    """Background task to ping the server's own health endpoint every 10 seconds."""
+    while True:
+        try:
+            url = f"http://localhost:{os.environ.get('PORT', 5000)}/health"
+            public_url = os.environ.get("PUBLIC_URL")
+            if public_url:
+                url = f"{public_url}/health"
+            requests.get(url, timeout=10)
+            app.logger.info(f"Self-pinged {url}")
+        except Exception as e:
+            app.logger.warning(f"Self-ping failed: {e}")
+        time.sleep(30)  # Ping every 10 seconds
+
 def run_server():
     try:
         # Start health monitoring in background
         monitor_thread = Thread(target=monitor_server_health, daemon=True)
         monitor_thread.start()
+
+        # Start self-ping in background
+        ping_thread = Thread(target=self_ping, daemon=True)
+        ping_thread.start()
 
         # Use waitress for production
         app.logger.info(f'Starting server on port {int(os.environ.get("PORT", 5000))}')
@@ -175,6 +191,10 @@ def run_server():
         restart_server()
 
 if __name__ == '__main__':
+    # Start self-ping in background
+    ping_thread = Thread(target=self_ping, daemon=True)
+    ping_thread.start()
+
     # Use waitress for production
     port = int(os.environ.get('PORT', 5000))
     app.logger.info(f'Starting server on port {port}...')
