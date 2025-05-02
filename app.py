@@ -46,8 +46,8 @@ app.logger.info('Application startup')
 # Initialize extensions
 CORS(app, resources={
     r"/api/*": {
-        "origins": ["http://localhost:3000"],
-        "methods": ["POST"],
+        "origins": ["https://hrishith30.github.io/portfolio", "http://localhost:3000"],
+        "methods": ["POST", "OPTIONS"],
         "allow_headers": ["Content-Type"]
     }
 })
