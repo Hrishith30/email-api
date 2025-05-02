@@ -10,6 +10,7 @@ from waitress import serve
 import time
 import sys
 from threading import Thread
+from datetime import datetime
 
 # Load environment variables
 load_dotenv()
@@ -45,14 +46,9 @@ app.logger.info('Application startup')
 # Setup CORS properly for GitHub Pages
 CORS(app, resources={
     r"/api/*": {
-        "origins": [
-            "https://hrishith30.github.io",
-            "http://localhost:3000"
-        ],
-        "methods": ["GET", "POST", "OPTIONS"],
-        "allow_headers": ["Content-Type", "Accept", "Authorization", "Origin"],
-        "expose_headers": ["Content-Type"],
-        "supports_credentials": True
+        "origins": ["https://hrishith30.github.io/portfolio"],
+        "methods": ["POST", "OPTIONS"],
+        "allow_headers": ["Content-Type", "Accept"]
     }
 })
 
@@ -82,68 +78,40 @@ def restart_server():
 @app.route('/api/contact', methods=['POST'])
 def contact():
     try:
-        # Log the incoming request
-        app.logger.info("Received contact form submission")
-        
-        # Get JSON data
         data = request.get_json()
-        if not data:
-            return jsonify({
-                'success': False,
-                'message': 'No data received'
-            }), 400
-
-        # Log received data
-        app.logger.info(f"Received data: {data}")
         
-        # Extract form data
-        name = data.get('name')
-        email = data.get('email')
-        country_name = data.get('country_name')
-        country_code = data.get('country_code_display', '').strip()
-        phone = data.get('phone', '').strip()
-        message = data.get('message')
+        if not all(key in data for key in ['name', 'email', 'phone', 'message']):
+            return jsonify({'message': 'Missing required fields'}), 400
 
-        # Validate required fields
-        if not all([name, email, message]):
-            return jsonify({
-                'success': False,
-                'message': 'Missing required fields'
-            }), 400
+        # Log the incoming request
+        app.logger.info(f'Received contact form submission from {data["email"]}')
 
         # Create email body
         email_body = f"""
         New Contact Form Submission
-
-        Name: {name}
-        Email: {email}
-        Country: {country_name}
-        Phone: +{country_code} {phone}
         
-        Message:
-        {message}
+        Name: {data['name']}
+        Email: {data['email']}
+        Phone: {data['phone']}
+        Message: {data['message']}
+        
+        Sent at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
         """
 
-        # Send email
         msg = Message(
             subject='New Contact Form Submission',
             recipients=[os.getenv('RECIPIENT_EMAIL')],
             body=email_body
         )
-        msg.reply_to = email
-        mail.send(msg)
 
-        return jsonify({
-            'success': True,
-            'message': 'Message sent successfully!'
-        })
+        mail.send(msg)
+        app.logger.info(f'Successfully sent email for {data["email"]}')
+        
+        return jsonify({'message': 'Message sent successfully'}), 200
 
     except Exception as e:
-        app.logger.error(f"Error: {str(e)}\n{traceback.format_exc()}")
-        return jsonify({
-            'success': False,
-            'message': 'Failed to send message. Please try again.'
-        }), 500
+        app.logger.error(f'Error processing request: {str(e)}')
+        return jsonify({'message': 'Internal server error'}), 500
 
 # Health check endpoint
 @app.route('/health', methods=['GET'])
