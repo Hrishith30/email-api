@@ -73,7 +73,7 @@ def restart_server():
     app.logger.info("Restarting server...")
     os.execv(sys.executable, ['python'] + sys.argv)
 
-@app.route('/api/contact', methods=['POST'])
+@app.route('/', methods=['POST'])
 def contact():
     global server_healthy
     try:
