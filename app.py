@@ -46,9 +46,16 @@ app.logger.info('Application startup')
 # Initialize extensions
 CORS(app, resources={
     r"/api/*": {
-        "origins": ["https://hrishith30.github.io/portfolio", "http://localhost:3000"],
-        "methods": ["POST", "OPTIONS"],
-        "allow_headers": ["Content-Type"]
+        "origins": [
+            "https://hrishith30.github.io",
+            "https://hrishith30.github.io/portfolio",
+            "http://localhost:3000",
+            "http://localhost:5000"
+        ],
+        "methods": ["GET", "POST", "OPTIONS"],
+        "allow_headers": ["Content-Type", "Accept", "Authorization"],
+        "expose_headers": ["Content-Type", "X-CSRFToken"],
+        "supports_credentials": True
     }
 })
 mail = Mail(app)
@@ -73,48 +80,63 @@ def restart_server():
     app.logger.info("Restarting server...")
     os.execv(sys.executable, ['python'] + sys.argv)
 
-@app.route('/', methods=['POST'])
+@app.route('/api/contact', methods=['POST'])
 def contact():
     global server_healthy
     try:
-        data = request.get_json()
+        # Log the incoming request
+        app.logger.info("Received contact form submission")
         
+        # Get JSON data with error handling
+        try:
+            data = request.get_json()
+            if not data:
+                raise ValueError("No JSON data received")
+        except Exception as e:
+            app.logger.error(f"Error parsing JSON: {str(e)}")
+            return jsonify({
+                'success': False,
+                'message': 'Invalid request format'
+            }), 400
+
         # Debug logging
         app.logger.info(f"Received data: {data}")
         
-        # Extract form data
-        name = data.get('name')
-        email = data.get('email')
-        country = data.get('country_name')  # Get the full country name
-        country_phone = str(data.get('country_code_display', '')).replace('[', '').replace(']', '')
-        phone = data.get('phone')
-        message = data.get('message')
-
-        # Debug logging
-        app.logger.info(f"Country name received: {country}")
-
-        # Validate required fields
-        if not all([name, email, message]):
-            app.logger.warning(f'Missing required fields in contact form submission from {email}')
+        # Extract and validate form data
+        required_fields = {
+            'name': data.get('name'),
+            'email': data.get('email'),
+            'message': data.get('message')
+        }
+        
+        # Check for missing fields
+        missing_fields = [field for field, value in required_fields.items() if not value]
+        if missing_fields:
+            app.logger.warning(f"Missing required fields: {', '.join(missing_fields)}")
             return jsonify({
                 'success': False,
-                'message': 'Please fill in all required fields'
+                'message': f"Missing required fields: {', '.join(missing_fields)}"
             }), 400
+
+        # Extract optional fields
+        country = data.get('country_name', 'Not specified')
+        country_phone = str(data.get('country_code_display', '')).strip()
+        phone = data.get('phone', 'Not specified')
 
         # Create email body
         email_body = f"""
         New Contact Form Submission
 
-        Name: {name}
-        Email: {email}
+        Name: {required_fields['name']}
+        Email: {required_fields['email']}
         Country: {country}
         Phone: +{country_phone} {phone}
         
         Message:
-        {message}
+        {required_fields['message']}
         """
 
-        # Create and send email with retry mechanism
+        # Send email with retry mechanism
         max_retries = 3
         for attempt in range(max_retries):
             try:
@@ -123,29 +145,28 @@ def contact():
                     recipients=[os.getenv('RECIPIENT_EMAIL')],
                     body=email_body
                 )
-                msg.reply_to = email
+                msg.reply_to = required_fields['email']
                 mail.send(msg)
+                app.logger.info(f"Email sent successfully on attempt {attempt + 1}")
                 break
             except Exception as mail_error:
-                if attempt == max_retries - 1:  # Last attempt failed
-                    app.logger.error(f'Mail sending failed after {max_retries} attempts: {str(mail_error)}')
+                app.logger.error(f"Attempt {attempt + 1} failed: {str(mail_error)}")
+                if attempt == max_retries - 1:
                     return jsonify({
                         'success': False,
                         'message': 'Failed to send email. Please try again later.'
                     }), 500
-                time.sleep(2)  # Wait before retrying
-                continue
+                time.sleep(2)
 
-        app.logger.info(f'Successfully sent contact form submission from {email}')
-        server_healthy = True  # Mark server as healthy after successful operation
+        server_healthy = True
         return jsonify({
             'success': True,
             'message': 'Message sent successfully!'
         })
 
     except Exception as e:
-        server_healthy = False  # Mark server as unhealthy on error
-        app.logger.error(f'Error in contact form: {str(e)}\n{traceback.format_exc()}')
+        server_healthy = False
+        app.logger.error(f"Unexpected error: {str(e)}\n{traceback.format_exc()}")
         return jsonify({
             'success': False,
             'message': 'An unexpected error occurred. Please try again later.'
