@@ -6,12 +6,10 @@ import os
 import requests
 from dotenv import load_dotenv
 
-# Load local .env for development
 load_dotenv()
 
 app = FastAPI()
 
-# Allow CORS from your frontend
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["https://hrishith30.github.io"],
@@ -20,7 +18,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Contact form model
 class ContactForm(BaseModel):
     name: str
     email: str
@@ -28,21 +25,19 @@ class ContactForm(BaseModel):
     phone: str
     message: str
 
-# Test endpoint
 @app.get("/api/test")
 async def test_api():
     return {"status": "ok", "message": "API is reachable!"}
 
-# Contact endpoint using Brevo API
 @app.post("/api/contact")
 async def send_email(form: ContactForm):
     try:
         api_key = os.getenv("BREVO_API_KEY")
         recipient = os.getenv("RECIPIENT_EMAIL")
-        if not api_key or not recipient:
+
+        if not all([api_key, recipient]):
             raise ValueError("Missing BREVO_API_KEY or RECIPIENT_EMAIL")
 
-        # Brevo SMTP send via API
         url = "https://api.brevo.com/v3/smtp/email"
         headers = {
             "accept": "application/json",
