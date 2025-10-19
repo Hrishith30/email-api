@@ -4,9 +4,6 @@ from pydantic import BaseModel
 from fastapi.responses import JSONResponse
 import os
 import requests
-from dotenv import load_dotenv
-
-load_dotenv()
 
 app = FastAPI()
 
@@ -32,7 +29,7 @@ async def test_api():
     return {"status": "ok", "message": "API is reachable!"}
 
 def send_brevo_email(sender_name, sender_email, to_email, to_name, subject, content):
-    """Helper function to send an email via Brevo HTTP API"""
+    """Send email via Brevo HTTP API"""
     api_key = os.getenv("BREVO_API_KEY")
     if not api_key:
         raise ValueError("BREVO_API_KEY is missing. Set it in environment variables.")
@@ -53,7 +50,11 @@ def send_brevo_email(sender_name, sender_email, to_email, to_name, subject, cont
     response = requests.post(url, headers=headers, json=data)
 
     if response.status_code == 401:
-        raise ValueError("Brevo API Key Unauthorized. Check your API key and sender email verification.")
+        raise ValueError(
+            "Brevo API Key Unauthorized. "
+            "Make sure you are using the HTTP API key, not SMTP password, "
+            "and the sender email is verified."
+        )
     if response.status_code not in (200, 201, 202):
         raise ValueError(f"Brevo API error: {response.status_code} - {response.text}")
 
@@ -62,14 +63,13 @@ def send_brevo_email(sender_name, sender_email, to_email, to_name, subject, cont
 @app.post("/api/contact")
 async def send_email(form: ContactForm):
     try:
-        # Recipient and sender
-        recipient = os.getenv("RECIPIENT_EMAIL")  # Your inbox
-        sender_email = "999f85001@smtp-brevo.com"  # Verified sender email in Brevo
+        recipient = os.getenv("RECIPIENT_EMAIL")
+        sender_email = "999f85001@smtp-brevo.com"  # Verified sender in Brevo
 
         if not recipient:
             raise ValueError("RECIPIENT_EMAIL is missing. Set it in environment variables.")
 
-        # 1️⃣ Send notification to site owner
+        # 1️⃣ Email to site owner
         owner_subject = f"New Contact from {form.name}"
         owner_content = f"""
 Name: {form.name}
@@ -88,7 +88,7 @@ Message:
             content=owner_content
         )
 
-        # 2️⃣ Send confirmation to user
+        # 2️⃣ Confirmation email to user
         user_subject = "Thank you for contacting me!"
         user_content = f"""
 Hi {form.name},
