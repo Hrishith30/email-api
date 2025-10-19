@@ -10,7 +10,7 @@ app = FastAPI()
 # Allow requests from your frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://hrishith30.github.io"],
+    allow_origins=["https://hrishith30.github.io"],  # your portfolio
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -28,50 +28,50 @@ class ContactForm(BaseModel):
 async def test_api():
     return {"status": "ok", "message": "API is reachable!"}
 
-def send_brevo_email(sender_name, sender_email, to_email, to_name, subject, content):
+def send_email_brevo(sender_name, sender_email, to_email, to_name, subject, text_content):
     """Send email via Brevo HTTP API"""
     api_key = os.getenv("BREVO_API_KEY")
     if not api_key:
         raise ValueError("BREVO_API_KEY is missing. Set it in environment variables.")
-    
+
     url = "https://api.brevo.com/v3/smtp/email"
     headers = {
         "accept": "application/json",
         "api-key": api_key,
         "Content-Type": "application/json"
     }
-    data = {
+    payload = {
         "sender": {"name": sender_name, "email": sender_email},
         "to": [{"email": to_email, "name": to_name}],
         "subject": subject,
-        "textContent": content
+        "textContent": text_content
     }
 
-    response = requests.post(url, headers=headers, json=data)
+    response = requests.post(url, headers=headers, json=payload)
 
     if response.status_code == 401:
         raise ValueError(
             "Brevo API Key Unauthorized. "
-            "Make sure you are using the HTTP API key, not SMTP password, "
-            "and the sender email is verified."
+            "Make sure you are using the HTTP API key and the sender email is verified."
         )
+
     if response.status_code not in (200, 201, 202):
         raise ValueError(f"Brevo API error: {response.status_code} - {response.text}")
 
     return response
 
 @app.post("/api/contact")
-async def send_email(form: ContactForm):
+async def contact(form: ContactForm):
     try:
-        recipient = os.getenv("RECIPIENT_EMAIL")
-        sender_email = "999f85001@smtp-brevo.com"  # Verified sender in Brevo
+        owner_email = os.getenv("RECIPIENT_EMAIL")
+        sender_email = "999f85001@smtp-brevo.com"  # must be verified in Brevo
 
-        if not recipient:
+        if not owner_email:
             raise ValueError("RECIPIENT_EMAIL is missing. Set it in environment variables.")
 
-        # 1️⃣ Email to site owner
+        # Email to site owner
         owner_subject = f"New Contact from {form.name}"
-        owner_content = f"""
+        owner_body = f"""
 Name: {form.name}
 Email: {form.email}
 Country: {form.country}
@@ -79,18 +79,18 @@ Phone: {form.phone}
 Message:
 {form.message}
 """
-        send_brevo_email(
+        send_email_brevo(
             sender_name="Portfolio Contact",
             sender_email=sender_email,
-            to_email=recipient,
+            to_email=owner_email,
             to_name="Rishi",
             subject=owner_subject,
-            content=owner_content
+            text_content=owner_body
         )
 
-        # 2️⃣ Confirmation email to user
+        # Confirmation email to user
         user_subject = "Thank you for contacting me!"
-        user_content = f"""
+        user_body = f"""
 Hi {form.name},
 
 Thank you for reaching out. I have received your message and will get back to you soon.
@@ -102,13 +102,13 @@ Here’s a copy of your message:
 Best regards,
 Rishi
 """
-        send_brevo_email(
+        send_email_brevo(
             sender_name="Rishi Portfolio",
             sender_email=sender_email,
             to_email=form.email,
             to_name=form.name,
             subject=user_subject,
-            content=user_content
+            text_content=user_body
         )
 
         return {"status": "success", "message": "Emails sent successfully via Brevo API"}
