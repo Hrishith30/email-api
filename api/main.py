@@ -2,26 +2,24 @@ from fastapi import FastAPI, status
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from fastapi.responses import JSONResponse
-import os
 import smtplib
 from email.mime.text import MIMEText
+import os
 from dotenv import load_dotenv
 
-# Load .env locally
 load_dotenv()
 
 app = FastAPI()
 
-# Allow frontend requests
+# Allow requests from your portfolio frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://hrishith30.github.io"],  # your portfolio site
+    allow_origins=["https://hrishith30.github.io"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Contact form model
 class ContactForm(BaseModel):
     name: str
     email: str
@@ -36,12 +34,12 @@ async def test_api():
 @app.post("/api/contact")
 async def send_email(form: ContactForm):
     try:
-        sender = "rishi6211130@gmail.com.com"  # Verified Brevo SMTP email
-        smtp_pass = os.getenv("SMTP_PASSWORD")  # Your SMTP key
-        recipient = os.getenv("RECIPIENT_EMAIL")  # rishi6211130@gmail.com
+        sender = os.getenv("GMAIL_USER")
+        smtp_pass = os.getenv("GMAIL_APP_PASSWORD")
+        recipient = os.getenv("RECIPIENT_EMAIL")
 
-        if not smtp_pass or not recipient:
-            raise ValueError("Missing SMTP_PASSWORD or RECIPIENT_EMAIL in environment variables.")
+        if not all([sender, smtp_pass, recipient]):
+            raise ValueError("Missing GMAIL_USER, GMAIL_APP_PASSWORD, or RECIPIENT_EMAIL in environment variables.")
 
         subject = f"New Contact from {form.name}"
         body = f"""
@@ -58,8 +56,8 @@ Message:
         msg["From"] = sender
         msg["To"] = recipient
 
-        # Connect to Brevo SMTP relay
-        with smtplib.SMTP("smtp-relay.brevo.com", 587) as smtp:
+        # Connect to Gmail SMTP
+        with smtplib.SMTP("smtp.gmail.com", 587) as smtp:
             smtp.starttls()
             smtp.login(sender, smtp_pass)
             smtp.send_message(msg)
