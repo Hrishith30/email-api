@@ -1,14 +1,18 @@
-from fastapi import FastAPI, Request, status
+from fastapi import FastAPI, status
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from fastapi.responses import JSONResponse
 import smtplib
 from email.mime.text import MIMEText
 import os
+from dotenv import load_dotenv
+
+# ✅ Load environment variables from .env
+load_dotenv()
 
 app = FastAPI()
 
-# ✅ Allow CORS from your GitHub Pages site
+# ✅ Allow CORS for your frontend (GitHub Pages)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -27,19 +31,23 @@ class ContactForm(BaseModel):
     phone: str
     message: str
 
-# ✅ Route 1: Test endpoint
+# ✅ Test endpoint
 @app.get("/api/test")
 async def test_api():
     return {"status": "ok", "message": "API is reachable!"}
 
-# ✅ Route 2: Contact form email (Brevo)
+# ✅ Send email using Brevo SMTP
 @app.post("/api/contact")
 async def send_email(form: ContactForm):
     try:
-        # 🧠 Load Brevo SMTP credentials from environment
-        sender = os.getenv("BREVO_EMAIL")       # e.g., "yourname@domain.com"
-        password = os.getenv("BREVO_SMTP_KEY")  # your Brevo SMTP key
-        recipient = os.getenv("CONTACT_RECEIVER", sender)  # default to sender if not set
+        smtp_host = os.getenv("SMTP_HOST", "smtp-relay.brevo.com")
+        smtp_port = int(os.getenv("SMTP_PORT", 587))
+        smtp_user = os.getenv("SMTP_USER")
+        smtp_pass = os.getenv("SMTP_PASS")
+        recipient = os.getenv("RECIPIENT_EMAIL")
+
+        if not all([smtp_user, smtp_pass, recipient]):
+            raise ValueError("Missing SMTP or recipient configuration")
 
         subject = f"New Contact from {form.name}"
         body = (
@@ -52,13 +60,12 @@ async def send_email(form: ContactForm):
 
         msg = MIMEText(body)
         msg["Subject"] = subject
-        msg["From"] = sender
+        msg["From"] = smtp_user
         msg["To"] = recipient
 
-        # ✅ Brevo SMTP settings
-        with smtplib.SMTP("smtp-relay.brevo.com", 587) as smtp:
+        with smtplib.SMTP(smtp_host, smtp_port) as smtp:
             smtp.starttls()
-            smtp.login(sender, password)
+            smtp.login(smtp_user, smtp_pass)
             smtp.send_message(msg)
 
         return {"status": "success", "message": "Email sent successfully"}
