@@ -36,7 +36,7 @@ async def test_api():
 @app.post("/api/contact")
 async def send_email(form: ContactForm):
     try:
-        sender = "999f85001@smtp-brevo.com"  # Verified Brevo SMTP email
+        sender = "rishi6211130@gmail.com.com"  # Verified Brevo SMTP email
         smtp_pass = os.getenv("SMTP_PASSWORD")  # Your SMTP key
         recipient = os.getenv("RECIPIENT_EMAIL")  # rishi6211130@gmail.com
 
