@@ -14,7 +14,7 @@ app = FastAPI()
 # Allow requests from your portfolio frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://hrishith30.github.io"],
+    allow_origins=["https://portfolio-app-plum.vercel.app/"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
