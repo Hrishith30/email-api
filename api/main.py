@@ -23,13 +23,14 @@ app.add_middleware(
 class ContactForm(BaseModel):
     name: str
     email: str
-    country: str
-    phone: str
+    subject: str
     message: str
+
 
 @app.get("/api/test")
 async def test_api():
     return {"status": "ok", "message": "API is reachable!"}
+
 
 @app.post("/api/contact")
 async def send_email(form: ContactForm):
@@ -39,30 +40,33 @@ async def send_email(form: ContactForm):
         recipient = os.getenv("RECIPIENT_EMAIL")
 
         if not all([sender, smtp_pass, recipient]):
-            raise ValueError("Missing GMAIL_USER, GMAIL_APP_PASSWORD, or RECIPIENT_EMAIL in environment variables.")
+            raise ValueError(
+                "Missing GMAIL_USER, GMAIL_APP_PASSWORD, or RECIPIENT_EMAIL"
+            )
 
-        subject = f"New Contact from {form.name}"
-        body = f"""
-Name: {form.name}
-Email: {form.email}
-Country: {form.country}
-Phone: {form.phone}
-Message:
-{form.message}
-"""
+        email_body = f"""
+        Name: {form.name}
+        Email: {form.email}
 
-        msg = MIMEText(body)
-        msg["Subject"] = subject
+        Message:
+        {form.message}
+        """
+
+        msg = MIMEText(email_body)
+        msg["Subject"] = form.subject
         msg["From"] = sender
         msg["To"] = recipient
 
-        # Connect to Gmail SMTP
+        # Send email via Gmail SMTP
         with smtplib.SMTP("smtp.gmail.com", 587) as smtp:
             smtp.starttls()
             smtp.login(sender, smtp_pass)
             smtp.send_message(msg)
 
-        return {"status": "success", "message": "Email sent successfully!"}
+        return {
+            "status": "success",
+            "message": "Email sent successfully!"
+        }
 
     except Exception as e:
         return JSONResponse(
