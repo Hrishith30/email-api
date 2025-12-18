@@ -45,11 +45,11 @@ async def send_email(form: ContactForm):
             )
 
         email_body = f"""
-        Name: {form.name}
-        Email: {form.email}
+Name: {form.name}
+Email: {form.email}
 
-        Message:
-        {form.message}
+Message:
+{form.message}
         """
 
         msg = MIMEText(email_body)
@@ -57,16 +57,12 @@ async def send_email(form: ContactForm):
         msg["From"] = sender
         msg["To"] = recipient
 
-        # Send email via Gmail SMTP
         with smtplib.SMTP("smtp.gmail.com", 587) as smtp:
             smtp.starttls()
             smtp.login(sender, smtp_pass)
             smtp.send_message(msg)
 
-        return {
-            "status": "success",
-            "message": "Email sent successfully!"
-        }
+        return {"status": "success", "message": "Email sent successfully!"}
 
     except Exception as e:
         return JSONResponse(
